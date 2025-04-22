@@ -1,6 +1,7 @@
 import os
 from docx import Document
 import fitz  # PyMuPDF
+from pptx import Presentation  # Add this to the top of the file
 
 class FileHandler:
     def __init__(self):
@@ -16,6 +17,9 @@ class FileHandler:
             elif filename.endswith('.docx'):
                 content = await self.extract_docx(attachment)
                 file_contexts.append(f"[DOCX: {attachment.filename}]\n{content}")
+            elif filename.endswith('.pptx'):
+                content = await self.extract_pptx(attachment)
+                file_contexts.append(f"[PPTX: {attachment.filename}]\n{content}")
             elif filename.endswith('.txt'):
                 content = await self.extract_txt(attachment)
                 file_contexts.append(f"[TXT: {attachment.filename}]\n{content}")
@@ -55,3 +59,18 @@ class FileHandler:
             return text.strip()
         except Exception as e:
             return f"[Error reading TXT: {e}]"
+
+    async def extract_pptx(self, attachment):
+        try:
+            file_path = f"temp/{attachment.filename}"
+            await attachment.save(file_path)
+            prs = Presentation(file_path)
+            text = ""
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        text += shape.text + "\n"
+            os.remove(file_path)
+            return text.strip()
+        except Exception as e:
+            return f"[Error reading PPTX: {e}]"
