@@ -103,12 +103,12 @@ class ReplyCommands(commands.Cog):
         await self.send_long_message(ctx, cleaned_reply)
 
     async def generate_response(self, prompt):
-        api_url = 'http://localhost:11434/api/generate'
-        model_name = "deepseek-v2:latest"
+        api_url = 'http://localhost:11434/api/generate' #change to target api
+        model_name = "deepseek-v2:latest" #change to model used
         payload = {
             "model": model_name,
             "prompt": prompt,
-            "stream": False
+            "stream": False #change to true if you want to
         }
 
         try:
