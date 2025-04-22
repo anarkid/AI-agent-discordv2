@@ -28,36 +28,36 @@ class ReplyCommands(commands.Cog):
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
 
     @commands.command(help='Ask the bot something or upload a file to get insights!')
-    @commands.cooldown(1, 10, commands.BucketType.user)  # ⏳ Cooldown to prevent spam
+    @commands.cooldown(1, 10, commands.BucketType.user)
     async def reply(self, ctx, *, question: str = None):
         memory = self.load_memory()
-        guild_id = str(ctx.guild.id)
+        is_dm = ctx.guild is None
+        guild_id = str(ctx.guild.id) if not is_dm else f"user_{ctx.author.id}"
         channel_id = str(ctx.channel.id)
 
         if guild_id not in memory['servers']:
             memory['servers'][guild_id] = {}
 
-        # 🧠 Combine previous bot-user exchanges
         combined_context = ""
         for ch_id, conversations in memory['servers'][guild_id].items():
-            if ch_id == "personality":  # Skip the personality key
+            if ch_id == "personality":
                 continue
             for convo in conversations[-5:]:
                 combined_context += f"User: {convo['user']}\nBot: {convo['bot']}\n\n"
 
-        # 📜 Get recent messages in channel
         recent_msgs = []
-        async for msg in ctx.channel.history(limit=10):
-            if msg.author.bot:
-                continue
-            if msg.content.startswith('!reply'):
-                content = msg.content.replace('!reply', '').strip()
-                recent_msgs.append(f"User: {content}")
-            else:
-                recent_msgs.append(f"{msg.author.name}: {msg.content}")
+        if not is_dm:
+            async for msg in ctx.channel.history(limit=10):
+                if msg.author.bot:
+                    continue
+                if msg.content.startswith('!reply'):
+                    content = msg.content.replace('!reply', '').strip()
+                    recent_msgs.append(f"User: {content}")
+                else:
+                    recent_msgs.append(f"{msg.author.name}: {msg.content}")
         recent_context = "\n".join(recent_msgs)
 
-        # 📄 Handle file attachments
+        # File handling (works in DMs too)
         file_context = await self.file_handler.process_attachments(ctx.message.attachments)
         if ctx.message.attachments and not file_context:
             await ctx.send("📎 I saw the file but couldn’t read anything useful from it. Try a different format?")
@@ -66,8 +66,12 @@ class ReplyCommands(commands.Cog):
             await ctx.send("❗ Please ask a question or upload a file.")
             return
 
-        # 🎭 Fetch personality for server
-        personality_key = self.personality_handler.get_personality(guild_id)
+        # Fetch personality or use default
+        if not is_dm:
+            personality_key = self.personality_handler.get_personality(guild_id)
+        else:
+            personality_key = "wholesome"  # Default for DMs
+
         personality_instruction = self.personality_handler.AVAILABLE_PERSONALITIES.get(
             personality_key, self.personality_handler.AVAILABLE_PERSONALITIES["wholesome"]
         )
@@ -75,25 +79,18 @@ class ReplyCommands(commands.Cog):
         question = question or "(No specific question provided. Summarize or interpret the attached document.)"
         context_text = f"{combined_context.strip()}\n{recent_context.strip()}\n\n{file_context.strip()}"
         formatted_prompt = (
-            f"Here is the conversation context from this server:\n{context_text}\n\n"
+            f"Here is the conversation context:\n{context_text}\n\n"
             f"The user asked: \"{question}\"\n\n"
             f"Respond with this personality style:\n{personality_instruction}"
         )
 
-        # 🧠 Send "thinking" message
         thinking_message = await ctx.send("🧠 Thinking...")
-
-        # Start AI generation
         gen_task = asyncio.create_task(self.generate_response(formatted_prompt))
-
-        # Wait for the response and delete the "thinking" message
         reply = await gen_task
         cleaned_reply = self.clean_deepseek_reply(reply)
 
-        # Delete thinking message after response is ready
         await thinking_message.delete()
 
-        # 💾 Save memory
         new_entry = {"user": question, "bot": cleaned_reply}
         if channel_id not in memory['servers'][guild_id]:
             memory['servers'][guild_id][channel_id] = []

@@ -60,8 +60,14 @@ class GeneralCommands(commands.Cog):
             await ctx.send("❌ Invalid personality style. Use `!listTone` to view available options.")
             return
 
-        self.handler.set_personality(ctx.guild.id, style)
-        await ctx.send(f"🎭 Personality set to **{style}** for this server!")
+        # Use user ID for DMs, guild ID for servers
+        target_id = str(ctx.guild.id) if ctx.guild else f"user_{ctx.author.id}"
+        self.handler.set_personality(target_id, style)
+
+        if ctx.guild:
+            await ctx.send(f"🎭 Personality set to **{style}** for this server!")
+        else:
+            await ctx.send(f"🎭 Personality set to **{style}** for your DMs!")
 
     @commands.command(name='listTone', help="List all available personalities.")
     async def list_personalities(self, ctx):
