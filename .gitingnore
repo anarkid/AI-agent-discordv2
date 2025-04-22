@@ -1,4 +1,5 @@
 *.pyc
-__pycache__/
+/__pycache__/
 memory.json
 temp/
+*.cpython-313.pyc
