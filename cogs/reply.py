@@ -66,12 +66,8 @@ class ReplyCommands(commands.Cog):
             await ctx.send("❗ Please ask a question or upload a file.")
             return
 
-        # Fetch personality or use default
-        if not is_dm:
-            personality_key = self.personality_handler.get_personality(guild_id)
-        else:
-            personality_key = "wholesome"  # Default for DMs
-
+        # Fetch personality
+        personality_key = self.personality_handler.get_personality(guild_id)  # Use the user ID for DMs
         personality_instruction = self.personality_handler.AVAILABLE_PERSONALITIES.get(
             personality_key, self.personality_handler.AVAILABLE_PERSONALITIES["wholesome"]
         )
@@ -98,6 +94,7 @@ class ReplyCommands(commands.Cog):
         self.save_memory(memory)
 
         await self.send_long_message(ctx, cleaned_reply)
+
 
     async def generate_response(self, prompt):
         api_url = 'http://localhost:11434/api/generate' #change to target api

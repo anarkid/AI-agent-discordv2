@@ -24,25 +24,26 @@ class GeneralCommands(commands.Cog):
     @commands.command(name='commands', help='List all available bot commands.')
     async def list_commands(self, ctx):
         commands_list = [
-            "`!reply <message>` - Ask the bot or upload a PDF/DOCX file.",
+            "`!reply <message>` - Ask the bot or upload a PDF/DOCX/TXT/PPTX file.",
             "`!commands` - List all commands.",
             "`!forget` - Erase the bot's memory of this server.",
             "`!setTone [style]` - Set the bot's personality style.",
-            "`!listTone` - Show all available personalities."
+            "`!listTone` - Show all available personalities.",
+            "`!getTone` - Check the bot's current personality.",
         ]
         await ctx.send("**🤖 Available Commands:**\n" + "\n".join(commands_list))
 
     @commands.command(name='forget', help="Erase the bot's memory of this server, but keep personality settings.")
     async def clear_memory(self, ctx):
         memory = load_memory()
-        guild_id = str(ctx.guild.id)
+        target_id = str(ctx.guild.id) if ctx.guild else f"user_{ctx.author.id}"
         
-        if guild_id in memory["servers"]:
+        if target_id in memory["servers"]:
             # Preserve the personality setting by copying it before clearing the conversations
-            personality = memory["servers"][guild_id].get("personality", None)
+            personality = memory["servers"][target_id].get("personality", None)
 
             # Clear all conversation history but keep personality
-            memory["servers"][guild_id] = {"personality": personality} if personality else {}
+            memory["servers"][target_id] = {"personality": personality} if personality else {}
 
             save_memory(memory)
             await ctx.send("🧹 Conversation memory erased. Personality settings remain unchanged.")
@@ -69,11 +70,19 @@ class GeneralCommands(commands.Cog):
         else:
             await ctx.send(f"🎭 Personality set to **{style}** for your DMs!")
 
+
     @commands.command(name='listTone', help="List all available personalities.")
     async def list_personalities(self, ctx):
         personalities = self.handler.get_available_personalities()
         desc = '\n'.join([f"**{name}**: {desc}" for name, desc in personalities.items()])
         await ctx.send(f"🎭 **Available Personalities:**\n{desc}")
+
+    @commands.command(name='getTone', help="Check the bot's current personality.")
+    async def get_personality(self, ctx):
+        target_id = str(ctx.guild.id) if ctx.guild else f"user_{ctx.author.id}"
+        current_personality = self.handler.get_personality(target_id)
+        
+        await ctx.send(f"🎭 Current personality: **{current_personality}**")
 
 async def setup(bot):
     await bot.add_cog(GeneralCommands(bot))

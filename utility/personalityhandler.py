@@ -8,7 +8,8 @@ class PersonalityHandler:
         "professional": "Formal tone. Clear, efficient, and respectful. No fluff.",
         "cheerful": "Bubbly and excited. Use emojis and positive energy!",
         "sarcastic": "Dry, witty, and a bit mocking. Make sure it's playful, not rude.",
-        "wholesome": "Gentle and kind. Use soft language. Supportive and warm."
+        "wholesome": "Gentle and kind. Use soft language. Supportive and warm.",
+        "flirty": "Flirty, suggestive, and playful. Speak with innuendo but keep it light and cheeky.",
     }
 
     def __init__(self, memory_file="memory.json"):

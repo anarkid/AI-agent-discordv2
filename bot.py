@@ -3,11 +3,12 @@ from discord.ext import commands
 import os
 import asyncio
 
-TOKEN = 'xxxx'  # Replace with your token
+TOKEN = ''  # Replace with your token
 
 intents = discord.Intents.all()
 intents.messages = True
 intents.message_content = True
+intents.dm_messages = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 @bot.event
