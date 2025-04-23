@@ -117,7 +117,22 @@ class ReplyCommands(commands.Cog):
             return f"❌ Error contacting DeepSeek: {e}"
 
     async def send_long_message(self, ctx, message):
-        for chunk in [message[i:i + 2000] for i in range(0, len(message), 2000)]:
+        MAX_LENGTH = 2000
+        words = message.split()
+        chunks = []
+        current_chunk = ""
+
+        for word in words:
+            if len(current_chunk) + len(word) + 1 > MAX_LENGTH:
+                chunks.append(current_chunk)
+                current_chunk = word
+            else:
+                current_chunk += (" " if current_chunk else "") + word
+
+        if current_chunk:
+            chunks.append(current_chunk)
+
+        for chunk in chunks:
             await ctx.send(chunk)
 
 async def setup(bot):

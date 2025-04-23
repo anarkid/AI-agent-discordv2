@@ -3,7 +3,7 @@ from discord.ext import commands
 import os
 import asyncio
 
-TOKEN = ''  # Replace with your token
+TOKEN = 'xxx'  # Replace with your token
 
 intents = discord.Intents.all()
 intents.messages = True
