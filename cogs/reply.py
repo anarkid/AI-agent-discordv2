@@ -38,6 +38,7 @@ class ReplyCommands(commands.Cog):
         if guild_id not in memory['servers']:
             memory['servers'][guild_id] = {}
 
+        # Prepare combined context (skip 'personality' key)
         combined_context = ""
         for ch_id, conversations in memory['servers'][guild_id].items():
             if ch_id == "personality":
@@ -45,16 +46,18 @@ class ReplyCommands(commands.Cog):
             for convo in conversations[-5:]:
                 combined_context += f"User: {convo['user']}\nBot: {convo['bot']}\n\n"
 
+        # Prepare recent message history
         recent_msgs = []
         if not is_dm:
             async for msg in ctx.channel.history(limit=10):
                 if msg.author.bot:
-                    continue
+                    continue  # Skip bot messages
                 if msg.content.startswith('!reply'):
                     content = msg.content.replace('!reply', '').strip()
                     recent_msgs.append(f"User: {content}")
                 else:
                     recent_msgs.append(f"{msg.author.name}: {msg.content}")
+        
         recent_context = "\n".join(recent_msgs)
 
         # File handling (works in DMs too)
@@ -71,6 +74,7 @@ class ReplyCommands(commands.Cog):
         personality_instruction = self.personality_handler.AVAILABLE_PERSONALITIES.get(
             personality_key, self.personality_handler.AVAILABLE_PERSONALITIES["wholesome"]
         )
+
 
         question = question or "(No specific question provided. Summarize or interpret the attached document.)"
         context_text = f"{combined_context.strip()}\n{recent_context.strip()}\n\n{file_context.strip()}"
@@ -95,14 +99,13 @@ class ReplyCommands(commands.Cog):
 
         await self.send_long_message(ctx, cleaned_reply)
 
-
     async def generate_response(self, prompt):
-        api_url = 'http://localhost:11434/api/generate' #change to target api
-        model_name = "deepseek-v2:latest" #change to model used
+        api_url = 'http://localhost:11434/api/generate'  # change to target API
+        model_name = "deepseek-v2:latest"  # change to model used
         payload = {
             "model": model_name,
             "prompt": prompt,
-            "stream": False #change to true if you want to
+            "stream": False  # change to true if you want to stream responses
         }
 
         try:
