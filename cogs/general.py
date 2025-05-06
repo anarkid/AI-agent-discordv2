@@ -8,17 +8,32 @@ from utility.personalityhandler import PersonalityHandler
 class GeneralCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.memory_file = "memory.json"
-        self.handler = PersonalityHandler(memory_file=self.memory_file)
+        self.memory_dir = "memories"
+        os.makedirs(self.memory_dir, exist_ok=True)
+        self.handler = PersonalityHandler(memory_dir=self.memory_dir)
 
-    def load_memory(self):
-        if os.path.exists(self.memory_file):
-            with open(self.memory_file, "r") as f:
+    def load_memory(self, guild_id=None, user_id=None):
+        if guild_id:
+            memory_file = os.path.join(self.memory_dir, f"guild_{guild_id}.json")
+        elif user_id:
+            memory_file = os.path.join(self.memory_dir, f"user_{user_id}.json")
+        else:
+            return {"servers": {}}
+
+        if os.path.exists(memory_file):
+            with open(memory_file, "r") as f:
                 return json.load(f)
         return {"servers": {}}
 
-    def save_memory(self, memory_data):
-        with open(self.memory_file, "w") as f:
+    def save_memory(self, memory_data, guild_id=None, user_id=None):
+        if guild_id:
+            memory_file = os.path.join(self.memory_dir, f"guild_{guild_id}.json")
+        elif user_id:
+            memory_file = os.path.join(self.memory_dir, f"user_{user_id}.json")
+        else:
+            return
+
+        with open(memory_file, "w") as f:
             json.dump(memory_data, f, indent=4)
 
     @commands.command(name='commands', help='List all available bot commands.')
@@ -32,23 +47,29 @@ class GeneralCommands(commands.Cog):
         ]
         await ctx.send("**🤖 Available Commands:**\n" + "\n".join(commands_list))
 
-    @commands.command(name='forget', help="Erase the bot's memory of this server, but keep personality settings.")
+    @commands.command(name='forget', help="Erase the bot's memory of this server or DM, but keep personality settings.")
     async def clear_memory(self, ctx):
-        memory = self.load_memory()
-        target_id = str(ctx.guild.id) if ctx.guild else f"user_{ctx.author.id}"
-        
+        is_dm = ctx.guild is None
+        guild_id = ctx.guild.id if not is_dm else None
+        user_id = ctx.author.id if is_dm else None
+
+        memory = self.load_memory(guild_id=guild_id, user_id=user_id)
+        target_id = str(guild_id) if guild_id else f"user_{user_id}"
+
         if target_id in memory["servers"]:
             personality = memory["servers"][target_id].get("personality", None)
             memory["servers"][target_id] = {"personality": personality} if personality else {}
-            self.save_memory(memory)
+            self.save_memory(memory, guild_id=guild_id, user_id=user_id)
             await ctx.send("🧹 Conversation memory erased. Personality settings remain unchanged.")
         else:
-            await ctx.send("ℹ️ No memory found for this server.")
+            await ctx.send("ℹ️ No memory found to forget.")
+
 
     @commands.command(name='getTone', help="Check the bot's current personality.")
     async def get_personality(self, ctx):
         target_id = str(ctx.guild.id) if ctx.guild else f"user_{ctx.author.id}"
-        current_personality = self.handler.get_personality(target_id)
+        current_personality = self.handler.get_personality(guild_id=ctx.guild.id if ctx.guild else None,
+                                                           user_id=ctx.author.id if not ctx.guild else None)
         await ctx.send(f"🎭 Current personality: **{current_personality}**")
 
     @commands.command(name='chooseTone', help="Choose the bot's personality.")
@@ -56,81 +77,77 @@ class GeneralCommands(commands.Cog):
         personalities = self.handler.get_available_personalities()
         personality_keys = list(personalities.keys())
 
-        # Pagination: show 5 personalities at a time
         items_per_page = 5
         total_pages = len(personality_keys) // items_per_page + (1 if len(personality_keys) % items_per_page != 0 else 0)
-
-        # Show the first page
         page = 1
-        view = await self.create_personality_buttons(personality_keys, page, total_pages)
 
-        # Send the first message
+        view = await self.create_personality_buttons(ctx, personality_keys, page, total_pages)
         message = await ctx.send("🎭 **Choose a personality**:", view=view)
 
-        # Wait for the user interaction (buttons press)
         await view.wait()
-
-        # After timeout or completion, remove the buttons
         await message.edit(view=None)
 
-    async def create_personality_buttons(self, personalities, page, total_pages):
-        # Get the current page's personalities
+    async def create_personality_buttons(self, ctx, personalities, page, total_pages):
         items_per_page = 5
         start = (page - 1) * items_per_page
         end = min(page * items_per_page, len(personalities))
         page_personalities = personalities[start:end]
 
-        # Create buttons for each personality
-        buttons = [
-            Button(label=personality, custom_id=personality) for personality in page_personalities
-        ]
+        view = View(timeout=60)
 
-        # Add navigation buttons
-        view = View(timeout=60)  # Timeout after 60 seconds
-
-        # Page navigation buttons
         if page > 1:
             prev_button = Button(label="⬅️ Previous", custom_id=f"prev_page_{page}")
-            prev_button.callback = self.paginate_previous
+            async def prev_callback(interaction):
+                if interaction.user != ctx.author:
+                    await interaction.response.send_message("❌ You can't control this menu.", ephemeral=True)
+                    return
+                await interaction.response.edit_message(
+                    view=await self.create_personality_buttons(ctx, personalities, page - 1, total_pages)
+                )
+            prev_button.callback = prev_callback
             view.add_item(prev_button)
 
-        for button in buttons:
-            button.callback = self.set_personality_callback
+        for personality in page_personalities:
+            button = Button(label=personality, custom_id=personality)
+
+            async def button_callback(interaction, p=personality):
+                if interaction.user != ctx.author:
+                    await interaction.response.send_message("❌ You can't choose for someone else.", ephemeral=True)
+                    return
+
+                target_id = str(interaction.guild.id) if interaction.guild else f"user_{interaction.user.id}"
+                self.handler.set_personality(guild_id=interaction.guild.id if interaction.guild else None,
+                                             user_id=interaction.user.id if not interaction.guild else None,
+                                             personality=p)
+
+                memory = self.load_memory(guild_id=interaction.guild.id if interaction.guild else None,
+                                          user_id=interaction.user.id if not interaction.guild else None)
+
+                if target_id not in memory["servers"]:
+                    memory["servers"][target_id] = {}
+                memory["servers"][target_id]["personality"] = p
+                self.save_memory(memory,
+                                 guild_id=interaction.guild.id if interaction.guild else None,
+                                 user_id=interaction.user.id if not interaction.guild else None)
+
+                await interaction.response.send_message(f"🎭 Personality set to **{p}**", ephemeral=True)
+
+            button.callback = button_callback
             view.add_item(button)
 
         if page < total_pages:
             next_button = Button(label="➡️ Next", custom_id=f"next_page_{page}")
-            next_button.callback = self.paginate_next
+            async def next_callback(interaction):
+                if interaction.user != ctx.author:
+                    await interaction.response.send_message("❌ You can't control this menu.", ephemeral=True)
+                    return
+                await interaction.response.edit_message(
+                    view=await self.create_personality_buttons(ctx, personalities, page + 1, total_pages)
+                )
+            next_button.callback = next_callback
             view.add_item(next_button)
 
         return view
-
-    async def set_personality_callback(self, interaction: discord.Interaction):
-        personality = interaction.data["custom_id"]
-
-        target_id = str(interaction.guild.id) if interaction.guild else f"user_{interaction.user.id}"
-        self.handler.set_personality(target_id, personality)
-        
-        await interaction.response.send_message(f"🎭 Personality set to **{personality}**", ephemeral=True)
-
-    async def paginate_previous(self, interaction: discord.Interaction):
-        # Extract the current page from the custom_id
-        page = int(interaction.data["custom_id"].split("_")[2]) - 1
-        personality_keys = list(self.handler.get_available_personalities().keys())
-        total_pages = len(personality_keys) // 5 + (1 if len(personality_keys) % 5 else 0)
-        
-        view = await self.create_personality_buttons(personality_keys, page, total_pages)
-        await interaction.response.edit_message(view=view)
-
-    async def paginate_next(self, interaction: discord.Interaction):
-        # Extract the current page from the custom_id
-        page = int(interaction.data["custom_id"].split("_")[2]) + 1
-        personality_keys = list(self.handler.get_available_personalities().keys())
-        total_pages = len(personality_keys) // 5 + (1 if len(personality_keys) % 5 else 0)
-        
-        view = await self.create_personality_buttons(personality_keys, page, total_pages)
-        await interaction.response.edit_message(view=view)
-
 
 async def setup(bot):
     await bot.add_cog(GeneralCommands(bot))

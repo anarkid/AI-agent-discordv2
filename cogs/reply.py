@@ -4,24 +4,39 @@ import asyncio
 import os
 import re
 import aiohttp
-from utility.filehandler import FileHandler  # 📄 Handles file attachments
-from utility.personalityhandler import PersonalityHandler  # 🎭 Personality module
+from utility.filehandler import FileHandler
+from utility.personalityhandler import PersonalityHandler
 
 class ReplyCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.memory_file = "memory.json"
+        self.memory_dir = "memories"
+        os.makedirs(self.memory_dir, exist_ok=True)
         self.file_handler = FileHandler()
-        self.personality_handler = PersonalityHandler(memory_file=self.memory_file)
+        self.personality_handler = PersonalityHandler(memory_dir=self.memory_dir)
 
-    def load_memory(self):
-        if os.path.exists(self.memory_file):
-            with open(self.memory_file, "r") as f:
+    def load_memory(self, guild_id=None, user_id=None):
+        if guild_id:
+            memory_file = os.path.join(self.memory_dir, f"guild_{guild_id}.json")
+        elif user_id:
+            memory_file = os.path.join(self.memory_dir, f"user_{user_id}.json")
+        else:
+            return {"servers": {}}
+
+        if os.path.exists(memory_file):
+            with open(memory_file, "r") as f:
                 return json.load(f)
         return {"servers": {}}
 
-    def save_memory(self, memory_data):
-        with open(self.memory_file, "w") as f:
+    def save_memory(self, memory_data, guild_id=None, user_id=None):
+        if guild_id:
+            memory_file = os.path.join(self.memory_dir, f"guild_{guild_id}.json")
+        elif user_id:
+            memory_file = os.path.join(self.memory_dir, f"user_{user_id}.json")
+        else:
+            return
+        
+        with open(memory_file, "w") as f:
             json.dump(memory_data, f, indent=4)
 
     def clean_deepseek_reply(self, text):
@@ -30,37 +45,41 @@ class ReplyCommands(commands.Cog):
     @commands.command(help='Ask the bot something or upload a file to get insights!')
     @commands.cooldown(1, 10, commands.BucketType.user)
     async def reply(self, ctx, *, question: str = None):
-        memory = self.load_memory()
         is_dm = ctx.guild is None
-        guild_id = str(ctx.guild.id) if not is_dm else f"user_{ctx.author.id}"
+        guild_id = str(ctx.guild.id) if not is_dm else None
+        user_id = str(ctx.author.id) if is_dm else None
+        target_id = str(ctx.guild.id) if ctx.guild else f"user_{ctx.author.id}"
         channel_id = str(ctx.channel.id)
 
-        if guild_id not in memory['servers']:
-            memory['servers'][guild_id] = {}
+        memory = self.load_memory(guild_id=guild_id, user_id=user_id)
+        if target_id not in memory['servers']:
+            memory['servers'][target_id] = {}
 
-        # Prepare combined context (skip 'personality' key)
+        # Build refined combined context (last 10 relevant interactions)
         combined_context = ""
-        for ch_id, conversations in memory['servers'][guild_id].items():
+        for ch_id, conversations in memory['servers'][target_id].items():
             if ch_id == "personality":
                 continue
-            for convo in conversations[-5:]:
+            for convo in reversed(conversations[-10:]):
+                if len(convo['user']) < 5 or len(convo['bot']) < 5:
+                    continue
                 combined_context += f"User: {convo['user']}\nBot: {convo['bot']}\n\n"
 
-        # Prepare recent message history
+        # Add recent relevant messages from the channel
         recent_msgs = []
         if not is_dm:
-            async for msg in ctx.channel.history(limit=10):
+            async for msg in ctx.channel.history(limit=20):
                 if msg.author.bot:
-                    continue  # Skip bot messages
+                    continue
+                content = msg.content.strip()
+                if not content or len(content) < 5:
+                    continue
                 if msg.content.startswith('!reply'):
                     content = msg.content.replace('!reply', '').strip()
-                    recent_msgs.append(f"User: {content}")
-                else:
-                    recent_msgs.append(f"{msg.author.name}: {msg.content}")
-        
+                recent_msgs.append(f"{msg.author.name}: {content}")
         recent_context = "\n".join(recent_msgs)
 
-        # File handling (works in DMs too)
+        # Handle any uploaded files
         file_context = await self.file_handler.process_attachments(ctx.message.attachments)
         if ctx.message.attachments and not file_context:
             await ctx.send("📎 I saw the file but couldn’t read anything useful from it. Try a different format?")
@@ -69,43 +88,68 @@ class ReplyCommands(commands.Cog):
             await ctx.send("❗ Please ask a question or upload a file.")
             return
 
-        # Fetch personality
-        personality_key = self.personality_handler.get_personality(guild_id)  # Use the user ID for DMs
-        personality_instruction = self.personality_handler.AVAILABLE_PERSONALITIES.get(
-            personality_key, self.personality_handler.AVAILABLE_PERSONALITIES["wholesome"]
-        )
+        # Retrieve personality from user memory (get personality from handler)
+        selected_personality = self.personality_handler.get_personality(guild_id=guild_id, user_id=user_id)
 
+        # Check if the personality exists and retrieve instruction
+        if self.personality_handler.is_valid_personality(selected_personality):
+            instruction = self.personality_handler.AVAILABLE_PERSONALITIES[selected_personality.lower()]
+        else:
+            # Fallback to "wholesome" if the personality is not valid
+            instruction = self.personality_handler.AVAILABLE_PERSONALITIES["wholesome"]
+            await ctx.send(
+                f"⚠️ The personality `{selected_personality}` was not found. Falling back to `wholesome`."
+            )
 
+        # Formulate the question prompt with the context and the personality style
         question = question or "(No specific question provided. Summarize or interpret the attached document.)"
-        context_text = f"{combined_context.strip()}\n{recent_context.strip()}\n\n{file_context.strip()}"
         formatted_prompt = (
-            f"Here is the conversation context:\n{context_text}\n\n"
-            f"The user asked: \"{question}\"\n\n"
-            f"Respond with this personality style:\n{personality_instruction}"
+            f"[System Instruction]\n"
+            f"You are following personality style:\n"
+            f"{instruction}\n\n"
+
+            f"[Conversation History]\n"
+            f"{combined_context.strip() or 'No significant previous interactions.'}\n\n"
+
+            f"[Recent Channel Messages]\n"
+            f"{recent_context.strip() or 'No recent relevant messages.'}\n\n"
+
+            f"[File Attachment Summary]\n"
+            f"{file_context.strip() or 'No file uploaded.'}\n\n"
+
+            f"[User Question]\n"
+            f"{question.strip()}\n\n"
+
+            f"[Expected Behavior]\n"
+            f"Respond clearly and thoroughly, considering all the provided context and maintaining the defined personality style."
         )
 
         thinking_message = await ctx.send("🧠 Thinking...")
-        gen_task = asyncio.create_task(self.generate_response(formatted_prompt))
-        reply = await gen_task
-        cleaned_reply = self.clean_deepseek_reply(reply)
+        try:
+            reply = await asyncio.wait_for(self.generate_response(formatted_prompt), timeout=60)
+        except asyncio.TimeoutError:
+            await thinking_message.edit(content="⏱️ The model took too long to respond. Please try again.")
+            return
 
         await thinking_message.delete()
 
+        cleaned_reply = self.clean_deepseek_reply(reply)
         new_entry = {"user": question, "bot": cleaned_reply}
-        if channel_id not in memory['servers'][guild_id]:
-            memory['servers'][guild_id][channel_id] = []
-        memory['servers'][guild_id][channel_id].append(new_entry)
-        self.save_memory(memory)
+
+        if channel_id not in memory['servers'][target_id]:
+            memory['servers'][target_id][channel_id] = []
+        memory['servers'][target_id][channel_id].append(new_entry)
+        self.save_memory(memory, guild_id=guild_id, user_id=user_id)
 
         await self.send_long_message(ctx, cleaned_reply)
 
     async def generate_response(self, prompt):
-        api_url = 'http://localhost:11434/api/generate'  # change to target API
-        model_name = "deepseek-v2:latest"  # change to model used
+        api_url = 'http://localhost:11434/api/generate'
+        model_name = "deepseek-v2:latest"
         payload = {
             "model": model_name,
             "prompt": prompt,
-            "stream": False  # change to true if you want to stream responses
+            "stream": False
         }
 
         try:
@@ -116,7 +160,7 @@ class ReplyCommands(commands.Cog):
                     data = await resp.json()
                     return data.get("response", "🤖 No response from model.")
         except Exception as e:
-            print(f"[DeepSeek Error] {e}")  # 🐞 Debug log
+            print(f"[DeepSeek Error] {e}")
             return f"❌ Error contacting DeepSeek: {e}"
 
     async def send_long_message(self, ctx, message):

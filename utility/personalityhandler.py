@@ -2,11 +2,13 @@ import json
 import os
 
 class PersonalityHandler:
-    def __init__(self, memory_file="memory.json"):
-        self.memory_file = memory_file
+    def __init__(self, memory_dir="memories"):
+        self.memory_dir = memory_dir  # Directory where memory files will be stored
+        os.makedirs(self.memory_dir, exist_ok=True)  # Ensure the directory exists
         self.AVAILABLE_PERSONALITIES = self.load_personalities()
 
     def load_personalities(self):
+        """Load all personalities from the personalities folder."""
         all_personalities = {}
 
         # Directory where personality packs are stored
@@ -27,28 +29,54 @@ class PersonalityHandler:
         return all_personalities
 
     def get_available_personalities(self):
+        """Return a dictionary of available personalities."""
         return self.AVAILABLE_PERSONALITIES
 
     def is_valid_personality(self, personality):
+        """Check if the given personality is valid."""
         return personality.lower() in self.AVAILABLE_PERSONALITIES
 
-    def set_personality(self, guild_id, personality):
-        memory = self.load_memory()
-        if str(guild_id) not in memory['servers']:
-            memory['servers'][str(guild_id)] = {}
-        memory['servers'][str(guild_id)]['personality'] = personality.lower()
-        self.save_memory(memory)
+    def set_personality(self, guild_id=None, user_id=None, personality=None):
+        """Set the personality for a specific guild or user."""
+        memory = self.load_memory(guild_id=guild_id, user_id=user_id)
+        target_id = str(guild_id) if guild_id else f"user_{user_id}"
+        
+        if target_id not in memory['servers']:
+            memory['servers'][target_id] = {}
 
-    def get_personality(self, guild_id):
-        memory = self.load_memory()
-        return memory.get("servers", {}).get(str(guild_id), {}).get("personality", "wholesome")
+        memory['servers'][target_id]['personality'] = personality.lower()
+        self.save_memory(memory, guild_id=guild_id, user_id=user_id)
 
-    def load_memory(self):
-        if os.path.exists(self.memory_file):
-            with open(self.memory_file, "r") as f:
+    def get_personality(self, guild_id=None, user_id=None):
+        """Get the personality for a specific guild or user."""
+        memory = self.load_memory(guild_id=guild_id, user_id=user_id)
+        target_id = str(guild_id) if guild_id else f"user_{user_id}"
+        # Fetch the personality from memory if available, otherwise return a default
+        return memory.get("servers", {}).get(target_id, {}).get("personality", "wholesome")
+
+
+    def load_memory(self, guild_id=None, user_id=None):
+        """Load memory from the specific file for the guild or user."""
+        if guild_id:
+            memory_file = os.path.join(self.memory_dir, f"guild_{guild_id}.json")
+        elif user_id:
+            memory_file = os.path.join(self.memory_dir, f"user_{user_id}.json")
+        else:
+            return {"servers": {}}
+
+        if os.path.exists(memory_file):
+            with open(memory_file, "r") as f:
                 return json.load(f)
         return {"servers": {}}
 
-    def save_memory(self, memory):
-        with open(self.memory_file, "w") as f:
+    def save_memory(self, memory, guild_id=None, user_id=None):
+        """Save memory to the specific file for the guild or user."""
+        if guild_id:
+            memory_file = os.path.join(self.memory_dir, f"guild_{guild_id}.json")
+        elif user_id:
+            memory_file = os.path.join(self.memory_dir, f"user_{user_id}.json")
+        else:
+            return
+
+        with open(memory_file, "w") as f:
             json.dump(memory, f, indent=4)
