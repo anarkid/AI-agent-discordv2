@@ -13,16 +13,20 @@ class FileHandler:
             filename = attachment.filename.lower()
             if filename.endswith('.pdf'):
                 content = await self.extract_pdf(attachment)
-                file_contexts.append(f"[PDF: {attachment.filename}]\n{content}")
+                if content:
+                    file_contexts.append(f"[PDF: {attachment.filename}]\n{content}")
             elif filename.endswith('.docx'):
                 content = await self.extract_docx(attachment)
-                file_contexts.append(f"[DOCX: {attachment.filename}]\n{content}")
+                if content:
+                    file_contexts.append(f"[DOCX: {attachment.filename}]\n{content}")
             elif filename.endswith('.pptx'):
                 content = await self.extract_pptx(attachment)
-                file_contexts.append(f"[PPTX: {attachment.filename}]\n{content}")
+                if content:
+                    file_contexts.append(f"[PPTX: {attachment.filename}]\n{content}")
             elif filename.endswith('.txt'):
                 content = await self.extract_txt(attachment)
-                file_contexts.append(f"[TXT: {attachment.filename}]\n{content}")
+                if content:
+                    file_contexts.append(f"[TXT: {attachment.filename}]\n{content}")
         return "\n".join(file_contexts)
 
     async def extract_pdf(self, attachment):
@@ -33,8 +37,8 @@ class FileHandler:
             with fitz.open(file_path) as doc:
                 for page in doc:
                     text += page.get_text()
-            os.remove(file_path)
-            return text.strip()
+            os.remove(file_path)  # Delete the file after reading
+            return text.strip() if text else None
         except Exception as e:
             return f"[Error reading PDF: {e}]"
 
@@ -44,8 +48,8 @@ class FileHandler:
             await attachment.save(file_path)
             doc = Document(file_path)
             text = "\n".join([para.text for para in doc.paragraphs])
-            os.remove(file_path)
-            return text.strip()
+            os.remove(file_path)  # Delete the file after reading
+            return text.strip() if text else None
         except Exception as e:
             return f"[Error reading DOCX: {e}]"
 
@@ -55,8 +59,8 @@ class FileHandler:
             await attachment.save(file_path)
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 text = f.read()
-            os.remove(file_path)
-            return text.strip()
+            os.remove(file_path)  # Delete the file after reading
+            return text.strip() if text else None
         except Exception as e:
             return f"[Error reading TXT: {e}]"
 
@@ -70,7 +74,7 @@ class FileHandler:
                 for shape in slide.shapes:
                     if hasattr(shape, "text"):
                         text += shape.text + "\n"
-            os.remove(file_path)
-            return text.strip()
+            os.remove(file_path)  # Delete the file after reading
+            return text.strip() if text else None
         except Exception as e:
             return f"[Error reading PPTX: {e}]"

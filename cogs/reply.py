@@ -61,9 +61,11 @@ class ReplyCommands(commands.Cog):
             if ch_id == "personality":
                 continue
             for convo in reversed(conversations[-10:]):
-                if len(convo['user']) < 5 or len(convo['bot']) < 5:
+                if len(convo.get('user', '')) < 5 and len(convo.get('bot', '')) < 5:
                     continue
-                combined_context += f"User: {convo['user']}\nBot: {convo['bot']}\n\n"
+
+                file_part = f"\n[Related File Content]\n{convo['file_context']}" if 'file_context' in convo else ""
+                combined_context += f"User: {convo['user']}\nBot: {convo['bot']}{file_part}\n\n"
 
         # Add recent relevant messages from the channel
         recent_msgs = []
@@ -105,7 +107,7 @@ class ReplyCommands(commands.Cog):
         question = question or "(No specific question provided. Summarize or interpret the attached document.)"
         formatted_prompt = (
             f"[System Instruction]\n"
-            f"You are following personality style:\n"
+            f"You are AI assistant with following personality style:\n"
             f"{instruction}\n\n"
 
             f"[Conversation History]\n"
@@ -135,6 +137,10 @@ class ReplyCommands(commands.Cog):
 
         cleaned_reply = self.clean_deepseek_reply(reply)
         new_entry = {"user": question, "bot": cleaned_reply}
+
+        if file_context:
+            truncated_file_context = self.truncate_file_context(file_context)
+            new_entry["file_context"] = truncated_file_context
 
         if channel_id not in memory['servers'][target_id]:
             memory['servers'][target_id][channel_id] = []
@@ -181,6 +187,18 @@ class ReplyCommands(commands.Cog):
 
         for chunk in chunks:
             await ctx.send(chunk)
+    
+    def truncate_file_context(self, file_content: str, max_length: int = 1000) -> str:
+        """
+        Truncates file content based on heuristics.
+        """
+        if len(file_content) <= max_length:
+            return file_content.strip()
+
+        # If it's very large, keep head and tail
+        head = file_content[:int(max_length * 0.6)].strip()
+        tail = file_content[-int(max_length * 0.3):].strip()
+        return f"{head}\n...\n{tail}"
 
 async def setup(bot):
     await bot.add_cog(ReplyCommands(bot))
