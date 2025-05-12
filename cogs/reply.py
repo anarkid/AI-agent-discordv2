@@ -6,6 +6,7 @@ import re
 import aiohttp
 from utility.filehandler import FileHandler
 from utility.personalityhandler import PersonalityHandler
+from datetime import datetime
 
 class ReplyCommands(commands.Cog):
     def __init__(self, bot):
@@ -40,7 +41,17 @@ class ReplyCommands(commands.Cog):
             json.dump(memory_data, f, indent=4)
 
     def clean_deepseek_reply(self, text):
-        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+        # Remove hidden tags like <think>...</think>
+        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+        
+        # Remove leading AI-style prefixes (case-insensitive)
+        cleaned = re.sub(r"^(Bot:|AI:|Assistant:|Response:)\s*", "", cleaned, flags=re.IGNORECASE)
+        
+        return cleaned
+
+    def get_current_time(self):
+        # Get current time in the format: "Monday, May 12, 2025 at 11:09 PM"
+        return datetime.now().strftime("%A, %B %d, %Y at %I:%M %p")
 
     @commands.command(help='Ask the bot something or upload a file to get insights!')
     @commands.cooldown(1, 10, commands.BucketType.user)
@@ -51,11 +62,51 @@ class ReplyCommands(commands.Cog):
         target_id = str(ctx.guild.id) if ctx.guild else f"user_{ctx.author.id}"
         channel_id = str(ctx.channel.id)
 
+        # Detect time-related questions and handle separately
+        if question:
+            if re.search(r"\b(what\s+time\s+is\s+it|current\s+time|time\s+now|what's\s+the\s+time|tell\s+me\s+the\s+time|time\??)\b", question.lower()):
+                # Get the current time
+                current_time = self.get_current_time()
+
+                # Retrieve personality
+                selected_personality = self.personality_handler.get_personality(guild_id=guild_id, user_id=user_id)
+
+                # Check if the personality exists and retrieve instruction
+                if self.personality_handler.is_valid_personality(selected_personality):
+                    instruction = self.personality_handler.AVAILABLE_PERSONALITIES[selected_personality.lower()]
+                else:
+                    instruction = self.personality_handler.AVAILABLE_PERSONALITIES["wholesome"]
+
+                # Add the current time to the AI prompt and let the AI handle the response
+                formatted_prompt = (
+                    f"[System Instruction]\n"
+                    f"You are AI assistant with following personality style:\n"
+                    f"{instruction}\n\n"
+                    f"[User Question]\n"
+                    f"The user has asked for the current time. Here is the time: **{current_time}**.\n\n"
+                    f"[Expected Behavior]\n"
+                    f"Respond clearly and thoroughly, considering the provided context and maintaining the defined personality style."
+                )
+
+                # Send the prompt to the AI model and retrieve the response
+                thinking_message = await ctx.send("🧠 Thinking...")
+                try:
+                    reply = await asyncio.wait_for(self.generate_response(formatted_prompt), timeout=60)
+                except asyncio.TimeoutError:
+                    await thinking_message.edit(content="⏱️ The model took too long to respond. Please try again.")
+                    return
+
+                await thinking_message.delete()
+
+                cleaned_reply = self.clean_deepseek_reply(reply)
+                await ctx.send(cleaned_reply)
+                return
+
+        # Load memory and build refined combined context (last 10 relevant interactions)
         memory = self.load_memory(guild_id=guild_id, user_id=user_id)
         if target_id not in memory['servers']:
             memory['servers'][target_id] = {}
 
-        # Build refined combined context (last 10 relevant interactions)
         combined_context = ""
         for ch_id, conversations in memory['servers'][target_id].items():
             if ch_id == "personality":
@@ -67,7 +118,6 @@ class ReplyCommands(commands.Cog):
                 file_part = f"\n[Related File Content]\n{convo['file_context']}" if 'file_context' in convo else ""
                 combined_context += f"User: {convo['user']}\nBot: {convo['bot']}{file_part}\n\n"
 
-        # Add recent relevant messages from the channel
         recent_msgs = []
         if not is_dm:
             async for msg in ctx.channel.history(limit=20):
@@ -90,14 +140,13 @@ class ReplyCommands(commands.Cog):
             await ctx.send("❗ Please ask a question or upload a file.")
             return
 
-        # Retrieve personality from user memory (get personality from handler)
+        # Retrieve personality from user memory
         selected_personality = self.personality_handler.get_personality(guild_id=guild_id, user_id=user_id)
 
         # Check if the personality exists and retrieve instruction
         if self.personality_handler.is_valid_personality(selected_personality):
             instruction = self.personality_handler.AVAILABLE_PERSONALITIES[selected_personality.lower()]
         else:
-            # Fallback to "wholesome" if the personality is not valid
             instruction = self.personality_handler.AVAILABLE_PERSONALITIES["wholesome"]
             await ctx.send(
                 f"⚠️ The personality `{selected_personality}` was not found. Falling back to `wholesome`."
@@ -189,13 +238,9 @@ class ReplyCommands(commands.Cog):
             await ctx.send(chunk)
     
     def truncate_file_context(self, file_content: str, max_length: int = 1000) -> str:
-        """
-        Truncates file content based on heuristics.
-        """
         if len(file_content) <= max_length:
             return file_content.strip()
 
-        # If it's very large, keep head and tail
         head = file_content[:int(max_length * 0.6)].strip()
         tail = file_content[-int(max_length * 0.3):].strip()
         return f"{head}\n...\n{tail}"
