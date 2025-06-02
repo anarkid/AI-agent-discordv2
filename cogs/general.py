@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord.ui import Button, View
 import os
 import json
-from utility.personalityhandler import PersonalityHandler
+from handlers.personalityhandler import PersonalityHandler
 
 class GeneralCommands(commands.Cog):
     def __init__(self, bot):
@@ -64,12 +64,13 @@ class GeneralCommands(commands.Cog):
         else:
             await ctx.send("ℹ️ No memory found to forget.")
 
-
     @commands.command(name='getTone', help="Check the bot's current personality.")
     async def get_personality(self, ctx):
         target_id = str(ctx.guild.id) if ctx.guild else f"user_{ctx.author.id}"
-        current_personality = self.handler.get_personality(guild_id=ctx.guild.id if ctx.guild else None,
-                                                           user_id=ctx.author.id if not ctx.guild else None)
+        current_personality = self.handler.get_personality(
+            guild_id=ctx.guild.id if ctx.guild else None,
+            user_id=ctx.author.id if not ctx.guild else None
+        )
         await ctx.send(f"🎭 Current personality: **{current_personality}**")
 
     @commands.command(name='chooseTone', help="Choose the bot's personality.")
@@ -85,6 +86,7 @@ class GeneralCommands(commands.Cog):
         message = await ctx.send("🎭 **Choose a personality**:", view=view)
 
         await view.wait()
+        # Remove view when timed out if not already removed
         await message.edit(view=None)
 
     async def create_personality_buttons(self, ctx, personalities, page, total_pages):
@@ -97,6 +99,7 @@ class GeneralCommands(commands.Cog):
 
         if page > 1:
             prev_button = Button(label="⬅️ Previous", custom_id=f"prev_page_{page}")
+
             async def prev_callback(interaction):
                 if interaction.user != ctx.author:
                     await interaction.response.send_message("❌ You can't control this menu.", ephemeral=True)
@@ -110,18 +113,22 @@ class GeneralCommands(commands.Cog):
         for personality in page_personalities:
             button = Button(label=personality, custom_id=personality)
 
-            async def button_callback(interaction, p=personality):
+            async def button_callback(interaction, p=personality, view=view):
                 if interaction.user != ctx.author:
                     await interaction.response.send_message("❌ You can't choose for someone else.", ephemeral=True)
                     return
 
                 target_id = str(interaction.guild.id) if interaction.guild else f"user_{interaction.user.id}"
-                self.handler.set_personality(guild_id=interaction.guild.id if interaction.guild else None,
-                                             user_id=interaction.user.id if not interaction.guild else None,
-                                             personality=p)
+                self.handler.set_personality(
+                    guild_id=interaction.guild.id if interaction.guild else None,
+                    user_id=interaction.user.id if not interaction.guild else None,
+                    personality=p
+                )
 
-                memory = self.load_memory(guild_id=interaction.guild.id if interaction.guild else None,
-                                          user_id=interaction.user.id if not interaction.guild else None)
+                memory = self.load_memory(
+                    guild_id=interaction.guild.id if interaction.guild else None,
+                    user_id=interaction.user.id if not interaction.guild else None
+                )
 
                 if target_id not in memory["servers"]:
                     memory["servers"][target_id] = {}
@@ -130,13 +137,18 @@ class GeneralCommands(commands.Cog):
                                  guild_id=interaction.guild.id if interaction.guild else None,
                                  user_id=interaction.user.id if not interaction.guild else None)
 
-                await interaction.response.send_message(f"🎭 Personality set to **{p}**", ephemeral=True)
+                # Edit the original message with disabled buttons and confirmation content
+                await interaction.response.edit_message(
+                    content=f"🎭 Personality set to **{p}**",
+                    view=None #Remove buttons instantly
+                )
 
             button.callback = button_callback
             view.add_item(button)
 
         if page < total_pages:
             next_button = Button(label="➡️ Next", custom_id=f"next_page_{page}")
+
             async def next_callback(interaction):
                 if interaction.user != ctx.author:
                     await interaction.response.send_message("❌ You can't control this menu.", ephemeral=True)
