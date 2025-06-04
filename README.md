@@ -94,8 +94,12 @@ docker run -d --name ollama \
   ollama/ollama
 ```
 Load a Model
+Use these commands with desired model
+
 ```docker exec -it ollama ollama run llama3```
+
 or
+
 ```docker exec -it ollama ollama run mistral```
 
 API Access
