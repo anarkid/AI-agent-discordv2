@@ -18,7 +18,6 @@
 - ⚙️ **Modular and Extensible**  
   Easily extendable architecture written in Python.
 
----
 
 ## 🧱 Architecture Overview
 
@@ -32,9 +31,6 @@ Prompt Engine Layer ← Injects personality data into prompt
 │
 ▼
 AI Model via Docker ← Local inference (e.g., Ollama)
-
-
----
 
 ## 📁 File Structure
 
