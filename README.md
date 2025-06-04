@@ -22,24 +22,16 @@
 
 ## 🧱 Architecture Overview
 
-+-------------------------+
-| Python AI Agent Logic |
-+-----------+-------------+
-|
-v
-+-------------------------+
-| Memory Engine Layer | ← Context injection from memory
-+-----------+-------------+
-|
-v
-+-------------------------+
-| Prompt Engine Layer | ← Personality injection
-+-----------+-------------+
-|
-v
-+-------------------------+
-| AI Model via Docker | ← Local LLM inference (e.g., Ollama)
-+-------------------------+
+Python AI Agent Logic
+│
+▼
+Memory Engine Layer ← Injects short-term memory context
+│
+▼
+Prompt Engine Layer ← Injects personality data into prompt
+│
+▼
+AI Model via Docker ← Local inference (e.g., Ollama)
 
 
 ---
