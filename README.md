@@ -20,7 +20,27 @@
 
 
 🧱 Architecture Overview
-<pre> ``` +-------------------------+ | Python AI Agent Logic | +-----------+-------------+ | v +-------------------------+ | Memory Engine Layer | ← Injects short-term memory context +-----------+-------------+ | v +-------------------------+ | Prompt Engine Layer | ← Injects personality into prompt +-----------+-------------+ | v +-------------------------+ | AI Model via Docker | ← Local inference (e.g., Ollama) +-------------------------+ ``` </pre>
+<pre> ``` 
+  +-------------------------+
+|  Python AI Agent Logic  |
++-----------+-------------+
+            |
+            v
++-------------------------+
+|   Memory Engine Layer   |  ← Injects short-term memory context
++-----------+-------------+
+            |
+            v
++-------------------------+
+|   Prompt Engine Layer   |  ← Injects personality into prompt
++-----------+-------------+
+            |
+            v
++-------------------------+
+|   AI Model via Docker   |  ← Local inference (e.g., Ollama)
++-------------------------+
+
+  ``` </pre>
 
 ## 📁 File Structure
 
