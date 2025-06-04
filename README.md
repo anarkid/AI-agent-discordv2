@@ -94,6 +94,7 @@ docker run -d --name ollama \
   ollama/ollama
 ```
 Load a Model
+
 Use these commands with desired model
 
 ```docker exec -it ollama ollama run llama3```
@@ -118,9 +119,9 @@ docker run -d --gpus all \
 ⚙️ Configuration
 🔑 Before First Run
 
-  Replace the token in bot.py with your Discord bot token.
+ - Replace the token in bot.py with your Discord bot token.
 
-  Update the LLM model name in reply.py with your installed model (e.g., llama3, mistral).
+ - Update the LLM model name in reply.py with your installed model (e.g., llama3, mistral).
 
 🎭 Personality Profiles
 
