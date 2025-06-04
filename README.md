@@ -77,57 +77,57 @@
 
 ### 🔧 Install Dependencies
 
-```bash```
-pip install -r requirements.txt
+bash
+```pip install -r requirements.txt```
 
 🐳 Local LLM Setup (via Ollama)
 
-    Pull the Docker Image
-
+Pull the Docker Image
+```
 docker pull ollama/ollama
-
-    Run the Container
-
+```
+Run the Container
+```
 docker run -d --name ollama \
   -p 11434:11434 \
   -v ollama_data:/root/.ollama \
   ollama/ollama
+```
+Load a Model
+```docker exec -it ollama ollama run llama3```
+or
+```docker exec -it ollama ollama run mistral```
 
-    Load a Model
+API Access
 
-docker exec -it ollama ollama run llama3
-# or
-docker exec -it ollama ollama run mistral
+```Endpoint: http://localhost:11434/api/generate```
 
-    API Access
-
-    Endpoint: http://localhost:11434/api/generate
-
-    (Optional) Enable GPU (Linux + NVIDIA)
-
+(Optional) Enable GPU (Linux + NVIDIA)
+```
 docker run -d --gpus all \
   --name ollama \
   -p 11434:11434 \
   -v ollama_data:/root/.ollama \
   ollama/ollama
+```
 
 ⚙️ Configuration
 🔑 Before First Run
 
-    Replace the token in bot.py with your Discord bot token.
+  Replace the token in bot.py with your Discord bot token.
 
-    Update the LLM model name in reply.py with your installed model (e.g., llama3, mistral).
+  Update the LLM model name in reply.py with your installed model (e.g., llama3, mistral).
 
 🎭 Personality Profiles
 
 Define custom personalities in utility/personalities/.
 
 Example: default.json
-
+```
 {
-  "personality": "A sarcastic, witty assistant that enjoys playful banter."
+  "personality": "personality description"
 }
-
+```
 💬 Bot Commands
 Command	Description
 !reply <msg>	Ask a question or interact with uploaded PDF/DOCX/TXT/PPTX files.
@@ -136,26 +136,16 @@ Command	Description
 !chooseTone	Opens a menu to select a personality.
 !getTone	Displays the current active personality.
 🔄 Personality Switching
-
     Shows a paginated menu (5 personalities per page).
-
     Only the invoking user can make a selection.
-
     Personality persists between sessions.
-
     !forget does not reset chosen tone.
 
 🔮 Future Improvements
-
     ✅ Persistent personality storage via database
-
     ✅ Voice chat support with text-to-speech and transcription
-
     ✅ Export responses as .txt or .md files
 
 📣 Contributions
 
 Contributions are welcome! Fork, modify, and send a pull request.
-📜 License
-
-MIT License. See LICENSE for details.
