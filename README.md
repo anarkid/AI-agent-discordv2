@@ -19,18 +19,8 @@
   Easily extendable architecture written in Python.
 
 
-## 🧱 Architecture Overview
-
-Python AI Agent Logic
-│
-▼
-Memory Engine Layer ← Injects short-term memory context
-│
-▼
-Prompt Engine Layer ← Injects personality data into prompt
-│
-▼
-AI Model via Docker ← Local inference (e.g., Ollama)
+🧱 Architecture Overview
+Python AI Agent Logic │ ▼ Memory Engine Layer ← Injects short-term memory context │ ▼ Prompt Engine Layer ← Injects personality data into prompt │ ▼ AI Model via Docker ← Local inference (e.g., Ollama)
 
 ## 📁 File Structure
 
