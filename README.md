@@ -137,16 +137,19 @@ Example: default.json
 | `!chooseTone`  | Opens a menu to select a personality.                                       |
 | `!getTone`     | Displays the current active personality.                                    |
 
-🔄 Personality Switching
-    - Shows a paginated menu (5 personalities per page).
-    - Only the invoking user can make a selection.
-    - Personality persists between sessions.
-    - !forget does not reset chosen tone.
+### 🔄 Personality Switching
 
-🔮 Future Improvements
-    - ✅ Persistent personality storage via database
-    - ✅ Voice chat support with text-to-speech and transcription
-    - ✅ Export responses as .txt or .md files
+- Shows a paginated menu (5 personalities per page).
+- Only the invoking user can make a selection.
+- Personality persists between sessions.
+- `!forget` does not reset the chosen tone.
+
+### 🔮 Future Improvements
+
+- ✅ Persistent personality storage via database
+- ✅ Voice chat support with text-to-speech and transcription
+- ✅ Export responses as `.txt` or `.md` files
+
 
 📣 Contributions
 
