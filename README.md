@@ -121,7 +121,7 @@ docker run -d --gpus all \
 
  - Replace the token in bot.py with your Discord bot token.
 
- - Update the LLM model name in reply.py with your installed model (e.g., llama3, mistral).
+ - Update the LLM model_name in response_handler.py with your installed model (e.g., llama3, mistral).
 
 🎭 Personality Profiles
 
