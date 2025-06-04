@@ -20,8 +20,8 @@
 
 
 🧱 Architecture Overview
-<pre> ``` 
-  +-------------------------+
+<pre>
+ +-------------------------+
 |  Python AI Agent Logic  |
 +-----------+-------------+
             |
@@ -40,10 +40,10 @@
 |   AI Model via Docker   |  ← Local inference (e.g., Ollama)
 +-------------------------+
 
-  ``` </pre>
+</pre>
 
 ## 📁 File Structure
-
+<pre>
 .
 ├── bot.py # Main entry script (Discord bot)
 ├── cogs/ # Discord command modules
@@ -64,7 +64,7 @@
 ├── requirements.txt # Python dependencies
 ├── .gitignore # Git exclusions
 └── README.md # You’re here!
-
+</pre>
 
 ---
 
