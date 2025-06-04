@@ -129,22 +129,24 @@ Example: default.json
 }
 ```
 💬 Bot Commands
-Command	Description
-!reply <msg>	Ask a question or interact with uploaded PDF/DOCX/TXT/PPTX files.
-!commands	Lists all available commands.
-!forget	Clears short-term memory for the server or DM.
-!chooseTone	Opens a menu to select a personality.
-!getTone	Displays the current active personality.
+| Command        | Description                                                                 |
+|----------------|-----------------------------------------------------------------------------|
+| `!reply <msg>` | Ask a question or interact with uploaded PDF/DOCX/TXT/PPTX files.           |
+| `!commands`    | Lists all available commands.                                               |
+| `!forget`      | Clears short-term memory for the server or DM.                              |
+| `!chooseTone`  | Opens a menu to select a personality.                                       |
+| `!getTone`     | Displays the current active personality.                                    |
+
 🔄 Personality Switching
-    Shows a paginated menu (5 personalities per page).
-    Only the invoking user can make a selection.
-    Personality persists between sessions.
-    !forget does not reset chosen tone.
+    - Shows a paginated menu (5 personalities per page).
+    - Only the invoking user can make a selection.
+    - Personality persists between sessions.
+    - !forget does not reset chosen tone.
 
 🔮 Future Improvements
-    ✅ Persistent personality storage via database
-    ✅ Voice chat support with text-to-speech and transcription
-    ✅ Export responses as .txt or .md files
+    - ✅ Persistent personality storage via database
+    - ✅ Voice chat support with text-to-speech and transcription
+    - ✅ Export responses as .txt or .md files
 
 📣 Contributions
 
