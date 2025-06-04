@@ -77,7 +77,7 @@
 
 ### 🔧 Install Dependencies
 
-```bash
+```bash```
 pip install -r requirements.txt
 
 🐳 Local LLM Setup (via Ollama)
