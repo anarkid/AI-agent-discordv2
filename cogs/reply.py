@@ -28,14 +28,15 @@ class ReplyCommands(commands.Cog):
         target_id = guild_id if guild_id else f"user_{ctx.author.id}"
         channel_id = str(ctx.channel.id)
 
-        # Load memory
+        # Load memory from cache or disk
         memory = self.memory_handler.load(guild_id=guild_id, user_id=user_id)
         if target_id not in memory['servers']:
             memory['servers'][target_id] = {}
 
-        # Collect combined context from past interactions
+        # Gather combined historical context
         combined_context = ""
-        for ch_id, conversations in memory['servers'][target_id].items():
+        server_memory = memory['servers'].get(target_id, {})
+        for ch_id, conversations in server_memory.items():
             if ch_id == "personality":
                 continue
             for convo in reversed(conversations[-10:]):
@@ -44,27 +45,22 @@ class ReplyCommands(commands.Cog):
                 file_part = f"\n[Related File Content]\n{convo['file_context']}" if 'file_context' in convo else ""
                 combined_context += f"User: {convo['user']}\nBot: {convo['bot']}{file_part}\n\n"
 
-        # Gather recent messages from this channel
+        # Gather recent messages (limited to last 10 to improve speed)
         recent_msgs = []
         if not is_dm:
-            async for msg in ctx.channel.history(limit=20):
+            async for msg in ctx.channel.history(limit=10):  # Reduced from 20 to 10
                 if msg.author.bot:
                     continue
                 content = msg.content.strip()
-                if not content or len(content) < 5:
-                    continue
-                if msg.content.startswith('!') or msg.content.startswith('/'):
+                if len(content) < 5 or content.startswith(('!', '/')):
                     continue
                 recent_msgs.append(f"{msg.author.name}: {content}")
         recent_context = "\n".join(recent_msgs)
 
-        # Handle file uploads
+        # Process file attachments
         file_context = await self.file_handler.process_attachments(ctx.message.attachments)
         if ctx.message.attachments and not file_context:
             await ctx.send("📎 I saw the file but couldn’t read anything useful from it. Try a different format?")
-        elif file_context:
-            file_context = re.sub(r'[\w\.-]+@[\w\.-]+', '[REDACTED_EMAIL]', file_context)
-            file_context = re.sub(r'\b\d{10,}\b', '[REDACTED_NUMBER]', file_context)
 
         if not question and not file_context:
             await ctx.send("❗ Please ask a question or upload a file.")
@@ -76,12 +72,24 @@ class ReplyCommands(commands.Cog):
             instruction = self.personality_handler.AVAILABLE_PERSONALITIES[selected_personality.lower()]
         else:
             instruction = self.personality_handler.AVAILABLE_PERSONALITIES["wholesome"]
-            await ctx.send(
-                f"⚠️ The personality `{selected_personality}` was not found. Falling back to `wholesome`."
-            )
+            await ctx.send(f"⚠️ The personality `{selected_personality}` was not found. Falling back to `wholesome`.")
 
-        # Build prompt
+        # Use fallback text if no question provided
         question = question or "(No specific question provided. Summarize or interpret the attached document.)"
+
+        # Optional: Skip model call if last user message was identical
+        previous_convos = memory['servers'][target_id].get(channel_id, [])
+        if previous_convos:
+            last_entry = previous_convos[-1]
+            if last_entry.get("user", "").strip() == question.strip():
+                await ctx.send(last_entry["bot"])
+                return
+
+        # Truncate file context before injecting into prompt
+        if file_context:
+            file_context = self.truncate_file_context(file_context)
+
+        # Build final prompt
         prompt = PromptBuilder.build(
             instruction=instruction,
             combined_context=combined_context,
@@ -90,53 +98,51 @@ class ReplyCommands(commands.Cog):
             question=question
         )
 
-        # Generate model reply
+        # Send placeholder message while thinking
         thinking = await ctx.send("🧠 Thinking...")
         try:
             reply = await asyncio.wait_for(self.response_handler.generate(prompt), timeout=60)
         except asyncio.TimeoutError:
             await thinking.edit(content="⏱️ The model took too long to respond.")
             return
+        except Exception as e:
+            logger.error(f"Error generating model reply: {e}")
+            await thinking.edit(content="⚠️ Something went wrong while generating the response.")
+            return
+
         await thinking.delete()
 
-        # Clean reply
-        cleaned_reply = self.clean_response(reply)
-        cleaned_reply = cleaned_reply.replace('\\n', '\n')
-
-        # Fix link formatting for Discord
+        # Clean and format the response
+        cleaned_reply = self.clean_response(reply).replace('\\n', '\n')
         cleaned_reply = self.fix_links(cleaned_reply)
 
-        # Save to memory
+        # Save conversation to memory
         new_entry = {"user": question, "bot": cleaned_reply}
         if file_context:
-            new_entry["file_context"] = self.truncate_file_context(file_context)
+            new_entry["file_context"] = file_context
         if channel_id not in memory['servers'][target_id]:
             memory['servers'][target_id][channel_id] = []
         memory['servers'][target_id][channel_id].append(new_entry)
         self.memory_handler.save(memory, guild_id=guild_id, user_id=user_id)
 
+        # Send full response in chunks
         await self.send_long_message(ctx, cleaned_reply)
 
     def clean_response(self, text):
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
         return re.sub(r"^(Bot:|AI:|Assistant:|Response:)\s*", "", text, flags=re.IGNORECASE)
-    
+
     def fix_links(self, text):
-        # Remove trailing commas/periods immediately after markdown links
+        # Remove trailing punctuation from links
         text = re.sub(r'(\[[^\]]+\]\([^)]+\))([,\.])', r'\1', text)
 
-        # Wrap raw URLs (not part of markdown links) with < >
+        # Wrap raw URLs with <>
         def repl(match):
             url = match.group(0)
-            if url.startswith('<') and url.endswith('>'):
-                return url
-            return f"<{url}>"
+            return url if url.startswith('<') else f"<{url}>"
 
         pattern = re.compile(r'(?<!\]\()https?://[^\s<>()]+', re.IGNORECASE)
-        text = pattern.sub(repl, text)
-
-        return text
-
+        return pattern.sub(repl, text)
 
     def truncate_file_context(self, file_content: str, max_length: int = 1000) -> str:
         if len(file_content) <= max_length:
